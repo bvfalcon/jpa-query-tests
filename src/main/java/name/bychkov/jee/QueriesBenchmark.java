@@ -1,6 +1,10 @@
 package name.bychkov.jee;
 
 import java.io.IOException;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.List;
 
@@ -46,7 +50,7 @@ public class QueriesBenchmark
 	}
 	
 	@State(Scope.Thread)
-	public static class QueryState
+	public static class QueryStateWithPlanCache
 	{
 		public EntityManager em;
 		public List<String> cities;
@@ -54,20 +58,13 @@ public class QueriesBenchmark
 		@Setup(Level.Iteration)
 		public void setupEachIter()
 		{
-			this.em = dbFactory.createEntityManager();			
+			this.em = dbFactory.createEntityManager();
 		}
 		
 		@Setup(Level.Invocation)
 		public void setupEach()
 		{
 			this.cities = Arrays.asList(FillDatabase.getRandomString(20), FillDatabase.getRandomString(20), FillDatabase.getRandomString(20));
-		}
-		
-		@TearDown(Level.Invocation)
-		public void tearDownEach()
-		{
-			em.clear();
-			((SessionFactoryImpl) dbFactory).getQueryPlanCache().cleanup();
 		}
 		
 		@TearDown(Level.Iteration)
@@ -77,27 +74,38 @@ public class QueriesBenchmark
 		}
 	}
 	
+	@State(Scope.Thread)
+	public static class QueryStateWithoutPlanCache extends QueryStateWithPlanCache
+	{
+		@TearDown(Level.Invocation)
+		public void tearDownEach()
+		{
+			em.clear();
+			((SessionFactoryImpl) dbFactory).getQueryPlanCache().cleanup();
+		}
+	}
+	
 	@Benchmark
-	public void nativeSql(QueryState state)
+	public void nativeSqlJpa(QueryStateWithoutPlanCache state)
 	{
 		state.em.createNativeQuery("SELECT r.* FROM Apartment a JOIN Resident r ON r.apartment_id = a.id JOIN House h ON a.house_id = h.id WHERE h.city IN :cities")
 				.setParameter("cities", state.cities).getResultList();
 	}
 	
 	@Benchmark
-	public void hql(QueryState state)
+	public void hqlWithoutCache(QueryStateWithoutPlanCache state)
 	{
 		state.em.createQuery("SELECT r FROM Resident r WHERE r.apartment.house.city IN :cities").setParameter("cities", state.cities).getResultList();
 	}
 	
 	@Benchmark
-	public void namedHql(QueryState state)
+	public void namedHqlWithoutCache(QueryStateWithoutPlanCache state)
 	{
 		state.em.createNamedQuery("Resident.findByHouseCity").setParameter("cities", state.cities).getResultList();
 	}
 	
 	@Benchmark
-	public void criteriaApi(QueryState state)
+	public void criteriaApi(QueryStateWithoutPlanCache state)
 	{
 		CriteriaBuilder cb = state.em.getCriteriaBuilder();
 		CriteriaQuery<Resident> cq = cb.createQuery(Resident.class);
@@ -108,11 +116,57 @@ public class QueriesBenchmark
 	}
 	
 	@Benchmark
-	public void entityGraph(QueryState state)
+	public void entityGraph(QueryStateWithoutPlanCache state)
 	{
 		EntityGraph<?> graph = state.em.createEntityGraph("resident-graph");
 		Query query = state.em.createQuery("SELECT r FROM Resident r WHERE r.apartment.house.city IN :cities");
 		query.setHint("javax.persistence.loadgraph", graph); // see note at https://www.baeldung.com/jpa-entity-graph#creating-entity-graph-2
 		query.setParameter("cities", state.cities).getResultList();
+	}
+	
+	@Benchmark
+	public void hqlWithCache(QueryStateWithPlanCache state)
+	{
+		state.em.createQuery("SELECT r FROM Resident r WHERE r.apartment.house.city IN :cities").setParameter("cities", state.cities).getResultList();
+	}
+	
+	@Benchmark
+	public void namedHqlWithCache(QueryStateWithPlanCache state)
+	{
+		state.em.createNamedQuery("Resident.findByHouseCity").setParameter("cities", state.cities).getResultList();
+	}
+	
+	@State(Scope.Thread)
+	public static class QueryStateJdbcConnection
+	{
+		public String[] cities;
+		public Connection conn;
+		
+		@Setup(Level.Iteration)
+		public void setupEachIter() throws SQLException
+		{
+			this.conn = DriverManager.getConnection("jdbc:mysql://127.0.0.1:3306/queries", "root", "test");
+		}
+		
+		@Setup(Level.Invocation)
+		public void setupEach()
+		{
+			this.cities = new String[] { "'" + FillDatabase.getRandomString(20) + "'",
+					"'" + FillDatabase.getRandomString(20) + "'",
+					"'" + FillDatabase.getRandomString(20) + "'" };
+		}
+		
+		@TearDown(Level.Iteration)
+		public void tearDownEachIter() throws SQLException
+		{
+			this.conn.close();
+		}
+	}
+	
+	@Benchmark
+	public void nativeSqlJdbc(QueryStateJdbcConnection state) throws SQLException
+	{
+		PreparedStatement ps = state.conn.prepareStatement("SELECT r.* FROM Apartment a JOIN Resident r ON r.apartment_id = a.id JOIN House h ON a.house_id = h.id WHERE h.city IN (" + String.join(",", state.cities) + ")");
+		ps.executeQuery();
 	}
 }

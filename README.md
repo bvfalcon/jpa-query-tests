@@ -32,4 +32,4 @@ gradlew clean build publishToMavenLocal -x test -x checkstyleMain
 
 1. Execute tests with real database queries:  `java -Dorg.jboss.logging.provider=slf4j -Dorg.slf4j.simpleLogger.defaultLogLevel=error -jar target\jpa-query-tests-TRUE-jar-with-dependencies.jar`
 
-1. Execute tests with fake database queries:  `java -Dorg.jboss.logging.provider=slf4j -Dorg.slf4j.simpleLogger.defaultLogLevel=error -jar target\jpa-query-tests-TRUE-jar-with-dependencies.jar`
+1. Execute tests with fake database queries:  `java -Dorg.jboss.logging.provider=slf4j -Dorg.slf4j.simpleLogger.defaultLogLevel=error -jar target\jpa-query-tests-TEST-jar-with-dependencies.jar`

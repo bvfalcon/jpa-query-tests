@@ -2,7 +2,6 @@ package name.bychkov.jee;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.Random;
 
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
@@ -55,10 +54,7 @@ public class FillDatabase
 	
 	static String getRandomString(int length)
 	{
-		String longString = random.ints(32, 127).limit(length)
-				.collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
-				.toString();
-		return longString;
+		return random.nextString(length);
 	}
 	
 	private static House createHouse()

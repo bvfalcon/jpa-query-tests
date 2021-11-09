@@ -1,8 +1,14 @@
 package name.bychkov.jee;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import javax.persistence.EntityGraph;
 import javax.persistence.EntityManager;
@@ -23,17 +29,25 @@ import name.bychkov.jee.jpa.Resident_;
 
 public class QueriesTest
 {
-	public static void main(String[] args)
+	public static void main(String[] args) throws SQLException
 	{
 		List<String> cities = Arrays.asList(FillDatabase.getRandomString(20), FillDatabase.getRandomString(20), FillDatabase.getRandomString(20));
-		// List<String> cities = Arrays.asList("3+d*OvH|\\vh,~Zy?\\&KD", "m_GMJz w?5:M# ,R~w,;", "{dT[6)L8vsyHX<_YBj|F");
+		//List<String> cities = Arrays.asList("dZo9gm2cspHBJMGY5qsb", "QNIRhX1mmnIo4O9s0wB2", "enecjhlIKZEFH4qdymeV");
 		
 		System.out.println("starting");
 		
-		// native SQL
+		// native SQL JPA
 		List nativeSQL = execute(em -> em.createNativeQuery("SELECT r.* FROM Apartment a JOIN Resident r ON r.apartment_id = a.id JOIN House h ON a.house_id = h.id WHERE h.city IN :cities")
 				.setParameter("cities", cities).getResultList());
-		System.out.println("nativeSQL: " + nativeSQL.size());
+		System.out.println("nativeSQL JPA: " + nativeSQL.size());
+		
+		// native SQL JDBC
+		Connection conn = DriverManager.getConnection("jdbc:mysql://127.0.0.1:3306/queries", "root", "test");
+		String array = String.join(", ", cities.stream().map(o -> new StringBuilder("'").append(o).append("'").toString()).collect(Collectors.toList()));
+		PreparedStatement ps = conn.prepareStatement("SELECT r.* FROM Apartment a JOIN Resident r ON r.apartment_id = a.id JOIN House h ON a.house_id = h.id WHERE h.city IN (" + array + ")");
+		ResultSet rs = ps.executeQuery();
+		System.out.println("nativeSQL JDBC: " + size(rs));
+		conn.close();
 		
 		// hql
 		List hql = execute(em -> em.createQuery("SELECT r FROM Resident r WHERE r.apartment.house.city IN :cities").setParameter("cities", cities).getResultList());
@@ -75,5 +89,15 @@ public class QueriesTest
 		em.close();
 		((SessionFactoryImpl) dbFactory).getQueryPlanCache().cleanup();
 		return result;
+	}
+	
+	private static int size(ResultSet rs) throws SQLException
+	{
+		int i = 0;
+		while (rs.next())
+		{
+			i++;
+		}
+		return i;
 	}
 }

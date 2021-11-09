@@ -5,7 +5,6 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.FetchType;
 import javax.persistence.Id;
@@ -34,8 +33,6 @@ public class Apartment implements Serializable
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "house_id")
 	private House house;
-	@Column(name = "house_id", insertable = false, updatable = false)
-	private Long houseId;
 	@OneToMany(fetch = FetchType.LAZY, mappedBy = "apartment")
 	private List<Resident> residents = new ArrayList<>(0);
 }
